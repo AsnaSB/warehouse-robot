@@ -17,7 +17,7 @@ so it plugs into standard RL tooling. Falls back to a plain base class
 if gymnasium isn't installed in a given environment — install it with
 `pip install gymnasium` for full compatibility.
 """
-
+from src.environment.collision import CollisionModel
 from typing import Optional
 
 import numpy as np
@@ -69,6 +69,19 @@ class WarehouseEnv(_BaseEnv):
         # Static shelf layout — fixed per config, doesn't change per episode.
         self._static_grid = get_layout(config, grid_size)
 
+        # Dynamic obstacles.
+        # These are populated by the environment as dynamic-obstacle
+        # integration is expanded.
+        self.workers = []
+        self.dynamic_robots = []
+
+        self.collision_model = CollisionModel(
+            grid_size=self.grid_size,
+            static_grid=self._static_grid,
+            workers=self.workers,
+            dynamic_robots=self.dynamic_robots,
+        )
+
         self.robot_pos = None
         self.goal_pos = None
         self._step_count = 0
@@ -83,7 +96,26 @@ class WarehouseEnv(_BaseEnv):
                 shape=(4,), dtype=np.float32,
             )
             self.action_space = spaces.Discrete(NUM_ACTIONS)
+    # ------------------------------------------------------------------
+    # Dynamic obstacle management
+    # ------------------------------------------------------------------
 
+    def set_dynamic_obstacles(
+        self,
+        workers=None,
+        dynamic_robots=None,
+    ):
+        """
+        Register dynamic obstacles with the environment collision model.
+        """
+
+        self.workers = list(workers or [])
+        self.dynamic_robots = list(dynamic_robots or [])
+
+        self.collision_model.set_dynamic_obstacles(
+            workers=self.workers,
+            dynamic_robots=self.dynamic_robots,
+        )
     # ------------------------------------------------------------------
     # Core API
     # ------------------------------------------------------------------
@@ -109,12 +141,38 @@ class WarehouseEnv(_BaseEnv):
         new_r = self.robot_pos[0] + dr
         new_c = self.robot_pos[1] + dc
 
-        collided = False
+        '''collided = False
         if not self._in_bounds(new_r, new_c) or self._is_shelf(new_r, new_c):
             # Blocked move: robot stays in place, treated as a collision.
             collided = True
         else:
-            self.robot_pos = (new_r, new_c)
+            self.robot_pos = (new_r, new_c)'''
+        
+        collided = False
+
+        new_position = (new_r, new_c)
+
+        is_diagonal = (
+            abs(dr) == 1
+            and abs(dc) == 1
+        )
+
+        if is_diagonal:
+            can_move = self.collision_model.can_move_diagonal(
+                self.robot_pos,
+                new_position,
+            )
+        else:
+            can_move = self.collision_model.can_move(
+                self.robot_pos,
+                new_position,
+            )
+
+        if can_move:
+            self.robot_pos = new_position
+        else:
+            collided = True
+
 
         reached_goal = self.robot_pos == self.goal_pos
 
