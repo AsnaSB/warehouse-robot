@@ -2,6 +2,11 @@
 utils.py
 
 Helper functions for the A* path planner.
+
+Day 5:
+- Eight-directional movement
+- Diagonal movement support
+- Diagonal corner-cutting prevention
 """
 
 from typing import List, Tuple
@@ -10,21 +15,43 @@ from typing import List, Tuple
 Position = Tuple[int, int]
 
 
-def manhattan_distance(start: Position, goal: Position) -> int:
+def manhattan_distance(
+    start: Position,
+    goal: Position
+) -> int:
     """
-    Compute the Manhattan distance between two grid positions.
-
-    Parameters
-    ----------
-    start : (row, col)
-    goal : (row, col)
-
-    Returns
-    -------
-    int
-        Manhattan distance.
+    Compute Manhattan distance between two grid positions.
     """
-    return abs(start[0] - goal[0]) + abs(start[1] - goal[1])
+
+    return (
+        abs(start[0] - goal[0])
+        + abs(start[1] - goal[1])
+    )
+
+
+def octile_distance(
+    start: Position,
+    goal: Position
+) -> float:
+    """
+    Compute the octile-distance heuristic for 8-directional movement.
+
+    Straight movement cost  = 1
+    Diagonal movement cost  = sqrt(2)
+
+    This heuristic is appropriate for an 8-connected grid.
+    """
+
+    dr = abs(start[0] - goal[0])
+    dc = abs(start[1] - goal[1])
+
+    diagonal_steps = min(dr, dc)
+    straight_steps = max(dr, dc) - diagonal_steps
+
+    return (
+        diagonal_steps * 2 ** 0.5
+        + straight_steps
+    )
 
 
 def is_valid_position(
@@ -35,11 +62,14 @@ def is_valid_position(
     Check whether a position is inside the grid and not blocked.
 
     Grid convention:
-        0 = free cell
+        0 = free
         1 = obstacle
     """
 
     row, col = position
+
+    if not grid:
+        return False
 
     rows = len(grid)
     cols = len(grid[0])
@@ -56,30 +86,159 @@ def is_valid_position(
     return True
 
 
+def is_diagonal_move(
+    current: Position,
+    neighbor: Position
+) -> bool:
+    """
+    Return True when current -> neighbor is diagonal.
+    """
+
+    dr = abs(
+        neighbor[0] - current[0]
+    )
+
+    dc = abs(
+        neighbor[1] - current[1]
+    )
+
+    return dr == 1 and dc == 1
+
+
+def is_diagonal_move_safe(
+    current: Position,
+    neighbor: Position,
+    grid: List[List[int]]
+) -> bool:
+    """
+    Prevent diagonal corner cutting.
+
+    For a diagonal movement:
+
+        current -> neighbor
+
+    both orthogonal cells touched by that diagonal must be free.
+
+    Example:
+
+        R X
+        X G
+
+    R -> G is NOT allowed because both adjacent orthogonal
+    cells are blocked.
+    """
+
+    if not is_diagonal_move(
+        current,
+        neighbor
+    ):
+        return True
+
+    current_row, current_col = current
+    neighbor_row, neighbor_col = neighbor
+
+    row_step = (
+        neighbor_row - current_row
+    )
+
+    col_step = (
+        neighbor_col - current_col
+    )
+
+    side_a = (
+        current_row + row_step,
+        current_col,
+    )
+
+    side_b = (
+        current_row,
+        current_col + col_step,
+    )
+
+    return (
+        is_valid_position(
+            side_a,
+            grid
+        )
+        and
+        is_valid_position(
+            side_b,
+            grid
+        )
+    )
+
+
 def get_neighbors(
     position: Position,
     grid: List[List[int]]
 ) -> List[Position]:
     """
-    Return all valid neighbouring cells.
+    Return all valid neighbouring cells using 8-directional movement.
 
-    Movement is limited to four directions:
-    Up, Down, Left, Right.
+    Directions:
+
+        N
+        NE
+        E
+        SE
+        S
+        SW
+        W
+        NW
+
+    Diagonal corner cutting is prevented.
     """
 
     row, col = position
 
     candidates = [
-        (row - 1, col),   # Up
-        (row + 1, col),   # Down
-        (row, col - 1),   # Left
-        (row, col + 1),   # Right
+        (row - 1, col),       # N
+        (row - 1, col + 1),   # NE
+        (row, col + 1),       # E
+        (row + 1, col + 1),   # SE
+        (row + 1, col),       # S
+        (row + 1, col - 1),   # SW
+        (row, col - 1),       # W
+        (row - 1, col - 1),   # NW
     ]
 
     neighbors = []
 
     for cell in candidates:
-        if is_valid_position(cell, grid):
-            neighbors.append(cell)
+
+        if not is_valid_position(
+            cell,
+            grid
+        ):
+            continue
+
+        if not is_diagonal_move_safe(
+            position,
+            cell,
+            grid
+        ):
+            continue
+
+        neighbors.append(cell)
 
     return neighbors
+
+
+def movement_cost(
+    current: Position,
+    neighbor: Position
+) -> float:
+    """
+    Return movement cost between two adjacent cells.
+
+    Straight movement = 1
+    Diagonal movement = sqrt(2)
+    """
+
+    if is_diagonal_move(
+        current,
+        neighbor
+    ):
+        return 2 ** 0.5
+
+    return 1.0
