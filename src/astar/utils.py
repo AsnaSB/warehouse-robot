@@ -7,9 +7,13 @@ Day 5:
 - Eight-directional movement
 - Diagonal movement support
 - Diagonal corner-cutting prevention
+
+Day 6:
+- Temporary dynamic obstacle blocking
+- blocked_cells support
 """
 
-from typing import List, Tuple
+from typing import Iterable, List, Tuple
 
 
 Position = Tuple[int, int]
@@ -38,8 +42,6 @@ def octile_distance(
 
     Straight movement cost  = 1
     Diagonal movement cost  = sqrt(2)
-
-    This heuristic is appropriate for an 8-connected grid.
     """
 
     dr = abs(start[0] - goal[0])
@@ -56,14 +58,24 @@ def octile_distance(
 
 def is_valid_position(
     position: Position,
-    grid: List[List[int]]
+    grid: List[List[int]],
+    blocked_cells: Iterable[Position] = None
 ) -> bool:
     """
-    Check whether a position is inside the grid and not blocked.
+    Check whether a position is inside the grid, is not a static
+    obstacle, and is not temporarily blocked by a dynamic obstacle.
 
-    Grid convention:
-        0 = free
-        1 = obstacle
+    Parameters
+    ----------
+    position:
+        (row, col) position to check.
+
+    grid:
+        Static warehouse grid.
+
+    blocked_cells:
+        Optional collection of temporary blocked cells occupied by
+        dynamic obstacles.
     """
 
     row, col = position
@@ -82,6 +94,10 @@ def is_valid_position(
 
     if grid[row][col] == 1:
         return False
+
+    if blocked_cells is not None:
+        if position in blocked_cells:
+            return False
 
     return True
 
@@ -108,24 +124,14 @@ def is_diagonal_move(
 def is_diagonal_move_safe(
     current: Position,
     neighbor: Position,
-    grid: List[List[int]]
+    grid: List[List[int]],
+    blocked_cells: Iterable[Position] = None
 ) -> bool:
     """
     Prevent diagonal corner cutting.
 
-    For a diagonal movement:
-
-        current -> neighbor
-
-    both orthogonal cells touched by that diagonal must be free.
-
-    Example:
-
-        R X
-        X G
-
-    R -> G is NOT allowed because both adjacent orthogonal
-    cells are blocked.
+    For a diagonal movement, both orthogonal cells touched by the
+    diagonal must be free of static and temporary dynamic obstacles.
     """
 
     if not is_diagonal_move(
@@ -158,35 +164,30 @@ def is_diagonal_move_safe(
     return (
         is_valid_position(
             side_a,
-            grid
+            grid,
+            blocked_cells
         )
         and
         is_valid_position(
             side_b,
-            grid
+            grid,
+            blocked_cells
         )
     )
 
 
 def get_neighbors(
     position: Position,
-    grid: List[List[int]]
+    grid: List[List[int]],
+    blocked_cells: Iterable[Position] = None
 ) -> List[Position]:
     """
     Return all valid neighbouring cells using 8-directional movement.
 
-    Directions:
+    Dynamic obstacles are treated as temporary blocked cells.
 
-        N
-        NE
-        E
-        SE
-        S
-        SW
-        W
-        NW
-
-    Diagonal corner cutting is prevented.
+    Diagonal corner cutting is prevented for both static and dynamic
+    obstacles.
     """
 
     row, col = position
@@ -208,14 +209,16 @@ def get_neighbors(
 
         if not is_valid_position(
             cell,
-            grid
+            grid,
+            blocked_cells
         ):
             continue
 
         if not is_diagonal_move_safe(
             position,
             cell,
-            grid
+            grid,
+            blocked_cells
         ):
             continue
 

@@ -9,16 +9,20 @@ Day 5 enhancement:
 - Diagonal movement cost = sqrt(2)
 - Octile-distance heuristic
 - Diagonal corner-cutting prevention
+
+Day 6 enhancement:
+- Temporary dynamic obstacle support through blocked_cells
 """
 
 import heapq
-from typing import List, Tuple, Optional
+from typing import Iterable, List, Tuple, Optional
 
 from .node import Node
 from .utils import (
     octile_distance,
     get_neighbors,
     movement_cost,
+    is_valid_position,
 )
 
 
@@ -88,9 +92,6 @@ class AStarPlanner:
     ) -> float:
         """
         Calculate the octile-distance heuristic.
-
-        Octile distance is appropriate for 8-directional
-        movement with diagonal cost sqrt(2).
         """
 
         return octile_distance(
@@ -123,7 +124,8 @@ class AStarPlanner:
     def find_path(
         self,
         start: Position,
-        goal: Position
+        goal: Position,
+        blocked_cells: Iterable[Position] = None
     ) -> Optional[List[Position]]:
         """
         Find the shortest path using A*.
@@ -136,6 +138,9 @@ class AStarPlanner:
         goal : (row, col)
             Goal position.
 
+        blocked_cells : iterable of (row, col), optional
+            Temporary cells occupied by dynamic obstacles.
+
         Returns
         -------
         Optional[List[Position]]
@@ -143,20 +148,31 @@ class AStarPlanner:
         """
 
         # --------------------------------------------------------------
+        # Normalize temporary dynamic obstacles
+        # --------------------------------------------------------------
+
+        blocked_cells = set(
+            blocked_cells or []
+        )
+
+        # --------------------------------------------------------------
         # Validate start and goal
         # --------------------------------------------------------------
 
-        from .utils import is_valid_position
-
+        # The robot's current position is the starting point and must
+        # remain usable even if the caller accidentally includes it
+        # in blocked_cells.
         if not is_valid_position(
             start,
             self.grid
         ):
             return None
 
+        # A blocked goal cannot be reached.
         if not is_valid_position(
             goal,
-            self.grid
+            self.grid,
+            blocked_cells
         ):
             return None
 
@@ -234,7 +250,8 @@ class AStarPlanner:
 
             for neighbor_pos in get_neighbors(
                 current.position,
-                self.grid
+                self.grid,
+                blocked_cells
             ):
 
                 if neighbor_pos in closed_set:
