@@ -1,4 +1,5 @@
 import os
+import sys
 import math
 import random
 import torch
@@ -6,8 +7,13 @@ import torch.nn as nn
 import torch.optim as optim
 from dataclasses import dataclass
 
-from network import QNetwork, NUM_ACTIONS
-from replay_buffer import ReplayBuffer
+# Ensure project root is in python path
+project_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+if project_root not in sys.path:
+    sys.path.append(project_root)
+
+from src.ddqn.network import QNetwork, NUM_ACTIONS
+from src.ddqn.replay_buffer import ReplayBuffer
 
 # ---------------------------------------------------------
 # 1. Configurable Hyperparameters
@@ -135,51 +141,3 @@ class DDQNAgent:
             self.checkpointer.save(self.current_step, self.online_net, self.target_net, self.optimizer)
 
         self.current_step += 1
-        # ---------------------------------------------------------
-# ---------------------------------------------------------
-# Pipeline Verification Test (Run this to verify Day 4)
-# ---------------------------------------------------------
-if __name__ == "__main__":
-    import numpy as np
-    print("--- Starting DDQN Pipeline Verification ---")
-    
-    # 1. Setup config with a tiny state and small batch size
-    test_config = DDQNConfig(
-        state_dim=25,
-        batch_size=4,            # <-- FIX: Added a small batch size
-        checkpoint_frequency=5,  # Force save every 5 steps
-        replay_warm_up=10        # Train after 10 samples
-    )
-    
-    # 2. Initialize Agent
-    agent = DDQNAgent(test_config)
-    print("Agent initialized successfully!")
-    
-    # 3. Inject fake experiences into the replay buffer
-    print("Populating replay buffer...")
-    for _ in range(15):
-        dummy_state = np.random.rand(25)
-        dummy_next_state = np.random.rand(25)
-        agent.buffer.push(dummy_state, 0, 1.0, dummy_next_state, False)
-        
-    # 4. Run training steps to trigger a save at step 5
-    print("Running training loop...")
-    for _ in range(6):
-        agent.train_step()
-        
-    print(f"Current step after training: {agent.current_step}")
-    
-    # 5. Verify Loading
-    print("--- Testing Checkpoint Resumption ---")
-    target_file = os.path.join(test_config.checkpoint_dir, "ddqn_step_5.pt")
-    
-    if os.path.exists(target_file):
-        agent.checkpointer.load(
-            target_file, 
-            agent.online_net, 
-            agent.target_net, 
-            agent.optimizer
-        )
-        print("✅ Pipeline Verified! Day 4 Checkpoint Complete.")
-    else:
-        print("❌ Error: Checkpoint file was not created.")
