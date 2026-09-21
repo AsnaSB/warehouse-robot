@@ -65,7 +65,8 @@ class AStarPlanner:
     def find_path(
         self,
         start: Position,
-        goal: Position
+        goal: Position,
+        blocked_cells=None
     ) -> Optional[List[Position]]:
         """
         Find the shortest path using the A* algorithm.
@@ -80,6 +81,7 @@ class AStarPlanner:
         Optional[List[Position]]
             Shortest path if one exists, otherwise None.
         """
+        blocked_cells = set(blocked_cells or [])
 
         # Create start node
         start_node = Node(start[0], start[1])
@@ -115,6 +117,9 @@ class AStarPlanner:
 
             # Explore neighbours
             for neighbor_pos in get_neighbors(current.position, self.grid):
+
+                if neighbor_pos in blocked_cells:
+                    continue
 
                 if neighbor_pos in closed_set:
                     continue

@@ -125,8 +125,8 @@ class ScenarioRunner:
         blocked_cells = self.get_blocked_cells()
 
         path = self.planner.find_path(
-            start=self.env.robot_pos,
-            goal=self.env.goal_pos,
+            self.env.robot_pos,
+            self.env.goal_pos,
             blocked_cells=blocked_cells,
         )
 
@@ -478,6 +478,10 @@ class ScenarioRunner:
                 f"Reward={reward:.2f} | "
                 f"Collision={info.get('collided', False)}"
             )
+
+            if info.get("collided", False):
+                print("Robot is stuck due to collision. Stopping scenario.")
+                return False
 
             self.render(title)
 

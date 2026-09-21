@@ -117,6 +117,9 @@ class WarehouseEnv(_BaseEnv):
             workers=self.workers,
             dynamic_robots=self.dynamic_robots,
         )
+
+    def set_astar_path(self, path=None):
+        self.current_astar_path = path
     # ------------------------------------------------------------------
     # Core API
     # ------------------------------------------------------------------
