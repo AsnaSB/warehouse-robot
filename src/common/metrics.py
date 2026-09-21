@@ -1,61 +1,43 @@
-import time
-import numpy as np
+"""
+metrics.py
+
+Tracks training and evaluation metrics for the warehouse robot.
+"""
 
 class MetricsTracker:
     def __init__(self):
-        # Navigation & Safety
-        self.successes = 0
-        self.total_episodes = 0
-        self.collisions = 0
+        # Step-level metrics
         self.near_misses = 0
-        self.min_obstacle_distances = []
         
-        # Efficiency & Hybrid
-        self.path_lengths = []
-        self.astar_path_lengths = []
-        self.replans = 0
-        
-        # Timing
-        self.planning_times = []
-        self.inference_times = []
-
-        # Learning
+        # Episode-level metrics
         self.episode_rewards = []
+        self.episode_lengths = []
+        self.successes = []
+        self.collisions = []
         self.losses = []
         self.epsilons = []
 
     def record_step(self, reward, min_dist, q_value, inference_time):
-        """Called every single time the robot takes a step."""
-        if min_dist < 2.0:  # Define your own threshold for a near miss
+        """Records data for a single step in the environment."""
+        # Safely handle cases where min_dist is None (no obstacles nearby)
+        if min_dist is not None and min_dist < 2.0:  # Define your own threshold for a near miss
             self.near_misses += 1
-        self.min_obstacle_distances.append(min_dist)
-        self.inference_times.append(inference_time)
 
-    def record_replan(self, planning_time):
-        """Called when the Dynamic Replanner is triggered."""
-        self.replans += 1
-        self.planning_times.append(planning_time)
-
-    def record_episode(self, success, collision, steps, actual_length, astar_length, total_reward, loss, epsilon):
-        """Called at the end of every episode."""
-        self.total_episodes += 1
-        if success:
-            self.successes += 1
-        if collision:
-            self.collisions += 1
-            
-        self.path_lengths.append(actual_length)
-        self.astar_path_lengths.append(astar_length)
+    def record_episode(
+        self, 
+        success, 
+        collision, 
+        steps, 
+        actual_length, 
+        astar_length, 
+        total_reward, 
+        loss, 
+        epsilon
+    ):
+        """Records aggregate data at the end of an episode."""
+        self.successes.append(success)
+        self.collisions.append(collision)
+        self.episode_lengths.append(steps)
         self.episode_rewards.append(total_reward)
         self.losses.append(loss)
         self.epsilons.append(epsilon)
-
-    def get_summary(self):
-        """Generates the dashboard metrics."""
-        return {
-            "Success Rate": self.successes / max(1, self.total_episodes),
-            "Collision Rate": self.collisions / max(1, self.total_episodes),
-            "Avg Episode Reward": np.mean(self.episode_rewards[-100:]) if self.episode_rewards else 0,
-            "Total Replans": self.replans,
-            "Path Efficiency": np.mean(self.astar_path_lengths) / max(1, np.mean(self.path_lengths)) if self.path_lengths else 0
-        }
