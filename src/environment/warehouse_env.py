@@ -83,6 +83,7 @@ class WarehouseEnv(_BaseEnv):
         )
 
         self.robot_pos = None
+        self.start_pos = None
         self.goal_pos = None
         self._step_count = 0
 
@@ -125,8 +126,22 @@ class WarehouseEnv(_BaseEnv):
             self._rng = np.random.default_rng(seed)
 
         self._step_count = 0
-        self.robot_pos = self._random_free_cell()
-        self.goal_pos = self._random_free_cell(exclude={self.robot_pos})
+
+        
+
+        self.robot_pos = (
+            self._random_free_cell()
+        )
+
+        self.start_pos = self.robot_pos
+
+        self.goal_pos = (
+            self._random_free_cell(
+                exclude={
+                    self.robot_pos
+                }
+            )
+        )
 
         obs = self._get_obs()
         info = {"config": self.config_name}
