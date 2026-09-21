@@ -1,115 +1,58 @@
 import os
-import sys
-import math
 import random
+import numpy as np
 import torch
 import torch.nn as nn
 import torch.optim as optim
-from dataclasses import dataclass
 
-# Ensure project root is in python path
-project_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-if project_root not in sys.path:
-    sys.path.append(project_root)
-
-from src.ddqn.network import QNetwork, NUM_ACTIONS
+from src.ddqn.network import QNetwork
 from src.ddqn.replay_buffer import ReplayBuffer
 
-# ---------------------------------------------------------
-# 1. Configurable Hyperparameters
-# ---------------------------------------------------------
-@dataclass
-class DDQNConfig:
-    state_dim: int
-    num_actions: int = NUM_ACTIONS
-    batch_size: int = 64
-    lr: float = 1e-3
-    gamma: float = 0.99
-    
-    target_update_frequency: int = 1000
-    replay_warm_up: int = 5000
-    buffer_capacity: int = 50000
-    
-    epsilon_start: float = 1.0
-    epsilon_min: float = 0.05
-    epsilon_decay_steps: int = 50000
-    
-    checkpoint_frequency: int = 10000
-    checkpoint_dir: str = "experiments/checkpoints/"
-
-# ---------------------------------------------------------
-# 2. Checkpoint & Epsilon Managers
-# ---------------------------------------------------------
-class CheckpointManager:
-    def __init__(self, config: DDQNConfig):
-        self.dir = config.checkpoint_dir
-        os.makedirs(self.dir, exist_ok=True)
-
-    def save(self, step: int, online_net, target_net, optimizer):
-        filepath = os.path.join(self.dir, f"ddqn_step_{step}.pt")
-        torch.save({
-            'step': step,
-            'online_state': online_net.state_dict(),
-            'target_state': target_net.state_dict(),
-            'optimizer_state': optimizer.state_dict()
-        }, filepath)
-        print(f"Checkpoint saved: {filepath}")
-
-    def load(self, filepath: str, online_net, target_net, optimizer) -> int:
-        checkpoint = torch.load(filepath)
-        online_net.load_state_dict(checkpoint['online_state'])
-        target_net.load_state_dict(checkpoint['target_state'])
-        optimizer.load_state_dict(checkpoint['optimizer_state'])
-        print(f"Resumed from step {checkpoint['step']}")
-        return checkpoint['step']
-
-class EpsilonScheduler:
-    def __init__(self, config: DDQNConfig):
-        self.config = config
-
-    def get(self, step: int) -> float:
-        if step >= self.config.epsilon_decay_steps:
-            return self.config.epsilon_min
-        decay = math.exp(-1. * step / self.config.epsilon_decay_steps)
-        return self.config.epsilon_min + (self.config.epsilon_start - self.config.epsilon_min) * decay
-
-# ---------------------------------------------------------
-# 3. Trainable DDQN Agent
-# ---------------------------------------------------------
 class DDQNAgent:
-    def __init__(self, config: DDQNConfig, device=None):
-        self.config = config
-        self.device = device if device else torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    def __init__(self, state_dim=51, action_dim=8, lr=1e-4, gamma=0.99, batch_size=64, buffer_capacity=50000):
+        self.state_dim = state_dim
+        self.action_dim = action_dim
+        self.gamma = gamma
+        self.batch_size = batch_size
         
-        # Networks
-        self.online_net = QNetwork(config.state_dim, config.num_actions).to(self.device)
-        self.target_net = QNetwork(config.state_dim, config.num_actions).to(self.device)
+        # Use GPU if available to speed up training, otherwise fallback to CPU
+        self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        
+        # Initialize Online and Target Networks
+        self.online_net = QNetwork(state_dim, num_actions=action_dim).to(self.device)
+        self.target_net = QNetwork(state_dim, num_actions=action_dim).to(self.device)
+        
+        # Target network starts with identical weights
         self.target_net.load_state_dict(self.online_net.state_dict())
-        self.target_net.eval()
+        self.target_net.eval() # Target network is never explicitly trained
         
-        self.optimizer = optim.Adam(self.online_net.parameters(), lr=config.lr)
-        self.buffer = ReplayBuffer(capacity=config.buffer_capacity)
+        self.optimizer = optim.Adam(self.online_net.parameters(), lr=lr)
+        self.loss_fn = nn.MSELoss()
         
-        self.scheduler = EpsilonScheduler(config)
-        self.checkpointer = CheckpointManager(config)
-        self.current_step = 0
-
-    def select_action(self, state):
+        self.memory = ReplayBuffer(capacity=buffer_capacity)
+        
+    def select_action(self, state, epsilon=0.0):
         """Epsilon-greedy action selection."""
-        if random.random() < self.scheduler.get(self.current_step):
-            return random.randrange(self.config.num_actions)
+        if random.random() <= epsilon:
+            return random.randint(0, self.action_dim - 1)
             
+        state_tensor = torch.FloatTensor(state).unsqueeze(0).to(self.device)
         with torch.no_grad():
-            state_tensor = torch.FloatTensor(state).unsqueeze(0).to(self.device)
             q_values = self.online_net(state_tensor)
-            return q_values.argmax().item()
-
-    def train_step(self):
-        """Executes a single DDQN learning step."""
-        if len(self.buffer) < self.config.replay_warm_up:
-            return 
             
-        states, actions, rewards, next_states, dones = self.buffer.sample(self.config.batch_size)
+        return torch.argmax(q_values).item()
+        
+    def store_transition(self, state, action, reward, next_state, done):
+        """Passes the transition to the replay buffer."""
+        self.memory.push(state, action, reward, next_state, done)
+        
+    def train_step(self):
+        """Samples a batch and performs one Double DQN optimization step."""
+        if len(self.memory) < self.batch_size:
+            return None # Not enough data to train yet
+            
+        # 1. Sample from Replay Buffer
+        states, actions, rewards, next_states, dones = self.memory.sample(self.batch_size)
         
         # Convert to tensors
         states = torch.FloatTensor(states).to(self.device)
@@ -118,26 +61,40 @@ class DDQNAgent:
         next_states = torch.FloatTensor(next_states).to(self.device)
         dones = torch.FloatTensor(dones).unsqueeze(1).to(self.device)
         
-        # DDQN Logic
-        with torch.no_grad():
-            best_actions = self.online_net(next_states).argmax(dim=1, keepdim=True)
-            next_q_values = self.target_net(next_states).gather(1, best_actions)
-            expected_q = rewards + (self.config.gamma * next_q_values * (1 - dones))
-            
+        # 2. Compute Current Q values
         current_q = self.online_net(states).gather(1, actions)
         
-        loss = nn.MSELoss()(current_q, expected_q)
+        # 3. Double DQN Logic for Target Q
+        with torch.no_grad():
+            # Online network selects the best action for the next state
+            next_actions = self.online_net(next_states).argmax(1, keepdim=True)
+            # Target network evaluates the Q-value of that chosen action
+            next_q = self.target_net(next_states).gather(1, next_actions)
+            
+            # Bellman equation
+            target_q = rewards + (1 - dones) * self.gamma * next_q
+            
+        # 4. Backpropagation
+        loss = self.loss_fn(current_q, target_q)
         
         self.optimizer.zero_grad()
         loss.backward()
+        
+        # Gradient clipping prevents exploding gradients during early training
+        torch.nn.utils.clip_grad_norm_(self.online_net.parameters(), max_norm=1.0)
         self.optimizer.step()
         
-        # Sync Target Network
-        if self.current_step % self.config.target_update_frequency == 0:
-            self.target_net.load_state_dict(self.online_net.state_dict())
-            
-        # Save Checkpoint
-        if self.current_step > 0 and self.current_step % self.config.checkpoint_frequency == 0:
-            self.checkpointer.save(self.current_step, self.online_net, self.target_net, self.optimizer)
-
-        self.current_step += 1
+        return loss.item()
+        
+    def update_target_network(self):
+        """Syncs target network weights with online network."""
+        self.target_net.load_state_dict(self.online_net.state_dict())
+        
+    def save(self, filepath):
+        """Saves the online network weights."""
+        torch.save(self.online_net.state_dict(), filepath)
+        
+    def load(self, filepath):
+        """Loads weights into both networks."""
+        self.online_net.load_state_dict(torch.load(filepath, map_location=self.device))
+        self.target_net.load_state_dict(self.online_net.state_dict())

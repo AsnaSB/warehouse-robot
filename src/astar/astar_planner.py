@@ -14,20 +14,25 @@ Day 6 enhancement:
 - Temporary dynamic obstacle support through blocked_cells
 """
 
+import sys
+import os
+
+# Go up two levels (from src/astar/ up to the root)
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '../..')))
+
 import heapq
 from typing import Iterable, List, Tuple, Optional
 
-from .node import Node
-from .utils import (
+# Updated to absolute imports to prevent ImportError when run directly
+from src.astar.node import Node
+from src.astar.utils import (
     octile_distance,
     get_neighbors,
     movement_cost,
     is_valid_position,
 )
 
-
 Position = Tuple[int, int]
-
 
 class AStarPlanner:
     """
@@ -63,12 +68,13 @@ class AStarPlanner:
             Warehouse grid.
         """
 
-        if not grid:
+        # Fixed: Explicit length check bypasses NumPy's boolean ambiguity
+        if grid is None or len(grid) == 0:
             raise ValueError(
                 "grid must not be empty."
             )
 
-        if not grid[0]:
+        if len(grid[0]) == 0:
             raise ValueError(
                 "grid must contain at least one column."
             )
@@ -93,7 +99,6 @@ class AStarPlanner:
         """
         Calculate the octile-distance heuristic.
         """
-
         return octile_distance(
             current,
             goal
@@ -106,9 +111,7 @@ class AStarPlanner:
         """
         Reconstruct the path from goal to start.
         """
-
         path: List[Position] = []
-
         current = goal_node
 
         while current is not None:
@@ -118,7 +121,6 @@ class AStarPlanner:
             current = current.parent
 
         path.reverse()
-
         return path
 
     def find_path(
@@ -150,7 +152,6 @@ class AStarPlanner:
         # --------------------------------------------------------------
         # Normalize temporary dynamic obstacles
         # --------------------------------------------------------------
-
         blocked_cells = set(
             blocked_cells or []
         )
@@ -158,17 +159,12 @@ class AStarPlanner:
         # --------------------------------------------------------------
         # Validate start and goal
         # --------------------------------------------------------------
-
-        # The robot's current position is the starting point and must
-        # remain usable even if the caller accidentally includes it
-        # in blocked_cells.
         if not is_valid_position(
             start,
             self.grid
         ):
             return None
 
-        # A blocked goal cannot be reached.
         if not is_valid_position(
             goal,
             self.grid,
@@ -179,7 +175,6 @@ class AStarPlanner:
         # --------------------------------------------------------------
         # Start node
         # --------------------------------------------------------------
-
         start_node = Node(
             start[0],
             start[1]
@@ -196,9 +191,7 @@ class AStarPlanner:
         # --------------------------------------------------------------
         # Open set
         # --------------------------------------------------------------
-
         open_set: List[Node] = []
-
         heapq.heappush(
             open_set,
             start_node
@@ -207,13 +200,11 @@ class AStarPlanner:
         # --------------------------------------------------------------
         # Closed set
         # --------------------------------------------------------------
-
         closed_set = set()
 
         # --------------------------------------------------------------
         # Best known g-cost
         # --------------------------------------------------------------
-
         g_score = {
             start: 0.0
         }
@@ -221,9 +212,7 @@ class AStarPlanner:
         # --------------------------------------------------------------
         # Main A* loop
         # --------------------------------------------------------------
-
         while open_set:
-
             current = heapq.heappop(
                 open_set
             )
@@ -238,7 +227,6 @@ class AStarPlanner:
             # ----------------------------------------------------------
             # Goal reached
             # ----------------------------------------------------------
-
             if current.position == goal:
                 return self.reconstruct_path(
                     current
@@ -247,13 +235,11 @@ class AStarPlanner:
             # ----------------------------------------------------------
             # Explore neighbours
             # ----------------------------------------------------------
-
             for neighbor_pos in get_neighbors(
                 current.position,
                 self.grid,
                 blocked_cells
             ):
-
                 if neighbor_pos in closed_set:
                     continue
 
@@ -271,7 +257,6 @@ class AStarPlanner:
                     neighbor_pos,
                     float("inf")
                 ):
-
                     g_score[
                         neighbor_pos
                     ] = tentative_g
@@ -299,5 +284,4 @@ class AStarPlanner:
         # --------------------------------------------------------------
         # No valid path
         # --------------------------------------------------------------
-
         return None
