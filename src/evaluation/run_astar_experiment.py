@@ -30,7 +30,7 @@ def run_astar_episode(env):
 
 if __name__ == "__main__":
     env = WarehouseEnv()
-
+    env.reset()
     result = run_astar_episode(env)
 
     print("A* Experiment Result")
