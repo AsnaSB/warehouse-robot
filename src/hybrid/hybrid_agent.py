@@ -27,26 +27,25 @@ class HybridAgent:
         self.replanner = replanner
         self.planner = astar_planner
 
-    def get_action(
+    def update_route_and_waypoint(
         self, 
-        state, 
         current_pos: Position, 
         goal_pos: Position, 
         blocked_cells: Optional[Set[Position]] = None
-    ) -> int:
+    ) -> Position:
         """
-        Determine the next action by ensuring the global path is valid,
-        updating the waypoint, and querying the DDQN.
+        Ensures global path validity, triggers replanning if blocked,
+        advances waypoints, and returns the active waypoint.
         """
         if blocked_cells is None:
             blocked_cells = set()
 
-        # 1. Initialize path if we don't have one
+        # 1. Initialize path if not set
         if not self.waypoint_manager.path:
             initial_path = self.planner.find_path(current_pos, goal_pos, blocked_cells)
             self.waypoint_manager.set_path(initial_path)
 
-        # 2. Check for dynamic obstacles blocking our route
+        # 2. Check dynamic obstacles / blocked route
         is_blocked = self.replanner.is_path_blocked(self.waypoint_manager.path, blocked_cells)
         is_invalid = self.waypoint_manager.is_waypoint_invalid(blocked_cells)
 
@@ -59,12 +58,12 @@ class HybridAgent:
             )
             self.waypoint_manager.set_path(new_path)
 
-        # 3. Advance to the next waypoint if the current one is reached
+        # 3. Advance waypoint if current one reached
         if self.waypoint_manager.is_waypoint_reached(current_pos):
             self.waypoint_manager.advance_waypoint()
 
-        # 4. Ask the DDQN for the optimal local movement (0-7)
-        # Note: The state passed here must already include the current waypoint vector!
-        action = self.ddqn.select_action(state)
+        return self.waypoint_manager.get_current_waypoint()
 
-        return action
+    def get_action(self, state, epsilon: float = 0.0) -> int:
+        """Queries the DDQN for local action with epsilon-greedy exploration."""
+        return self.ddqn.select_action(state, epsilon=epsilon)
