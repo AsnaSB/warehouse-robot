@@ -29,8 +29,8 @@ import torch
 import torch.nn as nn
 import torch.optim as optim
 
-from network import QNetwork, NUM_ACTIONS
-from replay_buffer import ReplayBuffer
+from .network import QNetwork, NUM_ACTIONS
+from .replay_buffer import ReplayBuffer
 
 
 class DDQNAgent:
