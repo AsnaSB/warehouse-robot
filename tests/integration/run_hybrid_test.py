@@ -3,7 +3,7 @@ from src.environment.warehouse_env import WarehouseEnv
 from src.astar.astar_planner import AStarPlanner
 from src.hybrid.waypoint_manager import WaypointManager
 from src.environment.state_augmentation import StateAugmenter  # Updated import
-from src.hybrid.hybrid_agent import DDQNAgent
+from src.ddqn.agent import DDQNAgent
 from src.astar.replanner import DynamicReplanner
 from src.common.metrics import MetricsTracker 
 

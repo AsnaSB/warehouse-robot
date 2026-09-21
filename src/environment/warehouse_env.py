@@ -120,6 +120,7 @@ class WarehouseEnv(_BaseEnv):
         # --------------------------------------------------------------
 
         self.robot_pos = None
+        self.start_pos = None
         self.goal_pos = None
         self._step_count = 0
 
@@ -202,6 +203,8 @@ class WarehouseEnv(_BaseEnv):
         self.robot_pos = (
             self._random_free_cell()
         )
+
+        self.start_pos = self.robot_pos
 
         self.goal_pos = (
             self._random_free_cell(
