@@ -26,7 +26,6 @@ def manhattan_distance(
     """
     Compute Manhattan distance between two grid positions.
     """
-
     return (
         abs(start[0] - goal[0])
         + abs(start[1] - goal[1])
@@ -43,7 +42,6 @@ def octile_distance(
     Straight movement cost  = 1
     Diagonal movement cost  = sqrt(2)
     """
-
     dr = abs(start[0] - goal[0])
     dc = abs(start[1] - goal[1])
 
@@ -64,23 +62,11 @@ def is_valid_position(
     """
     Check whether a position is inside the grid, is not a static
     obstacle, and is not temporarily blocked by a dynamic obstacle.
-
-    Parameters
-    ----------
-    position:
-        (row, col) position to check.
-
-    grid:
-        Static warehouse grid.
-
-    blocked_cells:
-        Optional collection of temporary blocked cells occupied by
-        dynamic obstacles.
     """
-
     row, col = position
 
-    if not grid:
+    # Fixed: Explicit length check bypasses NumPy's boolean ambiguity
+    if grid is None or len(grid) == 0:
         return False
 
     rows = len(grid)
@@ -109,14 +95,8 @@ def is_diagonal_move(
     """
     Return True when current -> neighbor is diagonal.
     """
-
-    dr = abs(
-        neighbor[0] - current[0]
-    )
-
-    dc = abs(
-        neighbor[1] - current[1]
-    )
+    dr = abs(neighbor[0] - current[0])
+    dc = abs(neighbor[1] - current[1])
 
     return dr == 1 and dc == 1
 
@@ -133,46 +113,22 @@ def is_diagonal_move_safe(
     For a diagonal movement, both orthogonal cells touched by the
     diagonal must be free of static and temporary dynamic obstacles.
     """
-
-    if not is_diagonal_move(
-        current,
-        neighbor
-    ):
+    if not is_diagonal_move(current, neighbor):
         return True
 
     current_row, current_col = current
     neighbor_row, neighbor_col = neighbor
 
-    row_step = (
-        neighbor_row - current_row
-    )
+    row_step = neighbor_row - current_row
+    col_step = neighbor_col - current_col
 
-    col_step = (
-        neighbor_col - current_col
-    )
-
-    side_a = (
-        current_row + row_step,
-        current_col,
-    )
-
-    side_b = (
-        current_row,
-        current_col + col_step,
-    )
+    side_a = (current_row + row_step, current_col)
+    side_b = (current_row, current_col + col_step)
 
     return (
-        is_valid_position(
-            side_a,
-            grid,
-            blocked_cells
-        )
+        is_valid_position(side_a, grid, blocked_cells)
         and
-        is_valid_position(
-            side_b,
-            grid,
-            blocked_cells
-        )
+        is_valid_position(side_b, grid, blocked_cells)
     )
 
 
@@ -183,13 +139,7 @@ def get_neighbors(
 ) -> List[Position]:
     """
     Return all valid neighbouring cells using 8-directional movement.
-
-    Dynamic obstacles are treated as temporary blocked cells.
-
-    Diagonal corner cutting is prevented for both static and dynamic
-    obstacles.
     """
-
     row, col = position
 
     candidates = [
@@ -206,20 +156,10 @@ def get_neighbors(
     neighbors = []
 
     for cell in candidates:
-
-        if not is_valid_position(
-            cell,
-            grid,
-            blocked_cells
-        ):
+        if not is_valid_position(cell, grid, blocked_cells):
             continue
 
-        if not is_diagonal_move_safe(
-            position,
-            cell,
-            grid,
-            blocked_cells
-        ):
+        if not is_diagonal_move_safe(position, cell, grid, blocked_cells):
             continue
 
         neighbors.append(cell)
@@ -233,15 +173,8 @@ def movement_cost(
 ) -> float:
     """
     Return movement cost between two adjacent cells.
-
-    Straight movement = 1
-    Diagonal movement = sqrt(2)
     """
-
-    if is_diagonal_move(
-        current,
-        neighbor
-    ):
+    if is_diagonal_move(current, neighbor):
         return 2 ** 0.5
 
     return 1.0
