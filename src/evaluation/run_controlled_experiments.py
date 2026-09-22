@@ -59,8 +59,17 @@ def load_agent(model_path):
         map_location=agent.device
     )
 
+    # Support checkpoints stored directly as state_dict.
+    # Also support checkpoints containing online_state.
+    if isinstance(weights, dict):
+        if "online_state" in weights:
+            weights = weights["online_state"]
+
     agent.online_net.load_state_dict(weights)
-    agent.target_net.load_state_dict(weights)
+
+    agent.target_net.load_state_dict(
+        agent.online_net.state_dict()
+    )
 
     agent.online_net.eval()
     agent.target_net.eval()
@@ -106,6 +115,7 @@ def calculate_path_length(path):
         path,
         path[1:]
     ):
+
         dr = next_pos[0] - current[0]
         dc = next_pos[1] - current[1]
 
@@ -144,7 +154,7 @@ def build_state(
 # ---------------------------------------------------------
 
 def evaluate_astar(env):
-    """Evaluate one A* episode."""
+    """Evaluate one A* episode by executing the planned path."""
 
     planner = AStarPlanner(
         env._static_grid
@@ -166,12 +176,104 @@ def evaluate_astar(env):
             "replans": 0
         }
 
+    # A* action mapping.
+    action_map = {
+        (-1, 0): 0,
+        (-1, 1): 1,
+        (0, 1): 2,
+        (1, 1): 3,
+        (1, 0): 4,
+        (1, -1): 5,
+        (0, -1): 6,
+        (-1, -1): 7
+    }
+
+    # Store path if supported by the environment.
+    if hasattr(env, "set_astar_path"):
+        env.set_astar_path(path)
+
+    total_reward = 0.0
+    path_length = 0.0
+    collisions = 0
+    steps = 0
+
+    previous_position = env.robot_pos
+
+    path_index = 1
+
+    terminated = False
+    truncated = False
+
+    while not (terminated or truncated):
+
+        if env.robot_pos == env.goal_pos:
+            break
+
+        if path_index >= len(path):
+            break
+
+        current_position = env.robot_pos
+        target_position = path[path_index]
+
+        dr = target_position[0] - current_position[0]
+        dc = target_position[1] - current_position[1]
+
+        action = action_map.get(
+            (dr, dc)
+        )
+
+        if action is None:
+            break
+
+        (
+            _,
+            reward,
+            terminated,
+            truncated,
+            info
+        ) = env.step(action)
+
+        total_reward += float(reward)
+
+        current_position = env.robot_pos
+
+        move_dr = (
+            current_position[0]
+            - previous_position[0]
+        )
+
+        move_dc = (
+            current_position[1]
+            - previous_position[1]
+        )
+
+        path_length += math.sqrt(
+            move_dr ** 2 + move_dc ** 2
+        )
+
+        if info.get(
+            "collided",
+            False
+        ):
+            collisions += 1
+
+        previous_position = current_position
+
+        steps += 1
+
+        # Move to the next A* waypoint only when
+        # the current target position was reached.
+        if current_position == target_position:
+            path_index += 1
+
     return {
-        "success": True,
-        "steps": len(path) - 1,
-        "reward": 0.0,
-        "path_length": calculate_path_length(path),
-        "collisions": 0,
+        "success": (
+            env.robot_pos == env.goal_pos
+        ),
+        "steps": steps,
+        "reward": total_reward,
+        "path_length": path_length,
+        "collisions": collisions,
         "replans": 0
     }
 
@@ -240,7 +342,10 @@ def evaluate_ddqn(
             dr ** 2 + dc ** 2
         )
 
-        if info.get("collided", False):
+        if info.get(
+            "collided",
+            False
+        ):
             collisions += 1
 
         previous_position = current_position
@@ -290,14 +395,21 @@ def evaluate_hybrid(
     )
 
     # Count actual calls to DynamicReplanner.replan().
-    replan_counter = {"count": 0}
+    replan_counter = {
+        "count": 0
+    }
 
     original_replan = replanner.replan
 
     def counted_replan(*args, **kwargs):
         """Count a replan and execute the original method."""
+
         replan_counter["count"] += 1
-        return original_replan(*args, **kwargs)
+
+        return original_replan(
+            *args,
+            **kwargs
+        )
 
     replanner.replan = counted_replan
 
@@ -334,6 +446,7 @@ def evaluate_hybrid(
                     obstacle,
                     "position"
                 ):
+
                     blocked_cells.add(
                         obstacle.position
                     )
@@ -384,7 +497,10 @@ def evaluate_hybrid(
             dr ** 2 + dc ** 2
         )
 
-        if info.get("collided", False):
+        if info.get(
+            "collided",
+            False
+        ):
             collisions += 1
 
         previous_position = current_position
@@ -415,6 +531,17 @@ def run_controlled_experiments():
 
     results = []
 
+    print("=" * 70)
+    print(
+        "CONTROLLED WAREHOUSE ROBOT EVALUATION"
+    )
+    print("=" * 70)
+    print()
+
+    print(
+        "Loading trained DDQN models..."
+    )
+
     # Load each model only once.
     pure_ddqn = load_agent(
         PURE_DDQN_MODEL
@@ -424,17 +551,21 @@ def run_controlled_experiments():
         HYBRID_MODEL
     )
 
+    print(
+        "Models loaded successfully."
+    )
+
     for scenario in SCENARIOS:
 
         print()
         print(
-            "======================================"
+            "=" * 70
         )
         print(
-            f"Scenario: {scenario.upper()}"
+            f"SCENARIO: {scenario.upper()}"
         )
         print(
-            "======================================"
+            "=" * 70
         )
 
         for method in [
@@ -464,6 +595,8 @@ def run_controlled_experiments():
 
                 env.reset()
 
+                # Use the original project's
+                # StateAugmenter configuration.
                 state_builder = (
                     StateAugmenter(
                         env._static_grid,
@@ -524,6 +657,7 @@ def run_controlled_experiments():
                     f"Episode {episode}: "
                     f"success={metrics['success']}, "
                     f"steps={metrics['steps']}, "
+                    f"collisions={metrics['collisions']}, "
                     f"replans={metrics['replans']}"
                 )
 
@@ -559,7 +693,7 @@ def run_controlled_experiments():
 
     print()
     print(
-        "======================================"
+        "=" * 70
     )
     print(
         "Controlled experiments completed."
@@ -568,7 +702,7 @@ def run_controlled_experiments():
         f"Results saved to: {OUTPUT_FILE}"
     )
     print(
-        "======================================"
+        "=" * 70
     )
 
 

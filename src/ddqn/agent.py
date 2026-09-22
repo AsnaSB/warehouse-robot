@@ -94,8 +94,15 @@ class DDQNAgent:
         self.device = device if device else torch.device("cuda" if torch.cuda.is_available() else "cpu")
         
         # Networks
-        self.online_net = QNetwork(config.state_dim, config.num_actions).to(self.device)
-        self.target_net = QNetwork(config.state_dim, config.num_actions).to(self.device)
+        self.online_net = QNetwork(
+            config.state_dim,
+            num_actions=config.num_actions
+        ).to(self.device)
+
+        self.target_net = QNetwork(
+            config.state_dim,
+            num_actions=config.num_actions
+        ).to(self.device)
         self.target_net.load_state_dict(self.online_net.state_dict())
         self.target_net.eval()
         
