@@ -12,7 +12,6 @@ OUTPUT_DIR = "outputs/figures"
 
 def load_results():
     """Load controlled experiment results."""
-
     return pd.read_csv(INPUT_FILE)
 
 
@@ -33,25 +32,18 @@ def create_summary(df):
     )
 
 
-def plot_metric(
-    summary,
-    metric,
-    title,
-    ylabel,
-    filename
-):
+def plot_metric(summary, metric, title, ylabel, filename):
     """Create grouped bar chart for one metric."""
 
     scenarios = ["open", "aisle", "dense"]
+
     methods = [
         "A*",
         "Pure DDQN",
         "Hybrid DDQN+A*"
     ]
 
-    fig, ax = plt.subplots(
-        figsize=(9, 5)
-    )
+    fig, ax = plt.subplots(figsize=(9, 5))
 
     x = range(len(scenarios))
     width = 0.25
@@ -70,9 +62,7 @@ def plot_metric(
             if row.empty:
                 values.append(0)
             else:
-                values.append(
-                    row.iloc[0][metric]
-                )
+                values.append(row.iloc[0][metric])
 
         positions = [
             value + (i - 1) * width
@@ -109,9 +99,7 @@ def plot_metric(
 
     plt.close()
 
-    print(
-        f"Created: {output_path}"
-    )
+    print(f"Created: {output_path}")
 
 
 def main():
@@ -135,15 +123,13 @@ def main():
         index=False
     )
 
-    print(
-        f"Created: {summary_file}"
-    )
+    print(f"Created: {summary_file}")
 
     # Success rate.
     plot_metric(
         summary,
         "success_rate",
-        "Success Rate Comparison",
+        "Success Rate by Scenario and Method",
         "Success Rate",
         "success_rate.png"
     )
@@ -152,7 +138,7 @@ def main():
     plot_metric(
         summary,
         "average_reward",
-        "Average Reward Comparison",
+        "Average Episode Reward by Scenario",
         "Average Reward",
         "reward_comparison.png"
     )
@@ -161,7 +147,7 @@ def main():
     plot_metric(
         summary,
         "average_collisions",
-        "Average Collision Comparison",
+        "Average Collisions by Scenario and Method",
         "Average Collisions",
         "collision_comparison.png"
     )
@@ -170,24 +156,13 @@ def main():
     plot_metric(
         summary,
         "average_path_length",
-        "Average Path Length Comparison",
+        "Average Path Length by Scenario and Method",
         "Path Length",
         "path_length_comparison.png"
     )
 
-    # Replanning.
-    plot_metric(
-        summary,
-        "average_replans",
-        "Average Replanning Comparison",
-        "Average Replans",
-        "replanning_comparison.png"
-    )
-
     print()
-    print(
-        "All evaluation graphs generated."
-    )
+    print("All evaluation graphs generated.")
 
 
 if __name__ == "__main__":
