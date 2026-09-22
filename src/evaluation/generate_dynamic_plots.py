@@ -1,4 +1,4 @@
-"""Generate comparison graphs from controlled experiment results."""
+"""Generate summary and graphs for dynamic evaluation."""
 
 import os
 
@@ -6,18 +6,17 @@ import pandas as pd
 import matplotlib.pyplot as plt
 
 
-INPUT_FILE = "outputs/results/controlled_results.csv"
+INPUT_FILE = "outputs/results/dynamic_results.csv"
 OUTPUT_DIR = "outputs/figures"
 
 
 def load_results():
-    """Load controlled experiment results."""
+    """Load dynamic experiment results."""
     return pd.read_csv(INPUT_FILE)
 
 
 def create_summary(df):
     """Create scenario-method summary."""
-
     return (
         df.groupby(["scenario", "method"])
         .agg(
@@ -34,15 +33,9 @@ def create_summary(df):
 
 
 def plot_metric(summary, metric, title, ylabel, filename):
-    """Create grouped bar chart for one metric."""
-
+    """Create grouped bar chart."""
     scenarios = ["open", "aisle", "dense"]
-
-    methods = [
-        "A*",
-        "Pure DDQN",
-        "Hybrid DDQN+A*",
-    ]
+    methods = ["A*", "Pure DDQN", "Hybrid DDQN+A*"]
 
     fig, ax = plt.subplots(figsize=(9, 5))
 
@@ -50,20 +43,15 @@ def plot_metric(summary, metric, title, ylabel, filename):
     width = 0.25
 
     for i, method in enumerate(methods):
-
         values = []
 
         for scenario in scenarios:
-
             row = summary[
                 (summary["scenario"] == scenario)
                 & (summary["method"] == method)
             ]
 
-            if row.empty:
-                values.append(0)
-            else:
-                values.append(row.iloc[0][metric])
+            values.append(row.iloc[0][metric] if not row.empty else 0)
 
         positions = [
             value + (i - 1) * width
@@ -74,14 +62,11 @@ def plot_metric(summary, metric, title, ylabel, filename):
             positions,
             values,
             width=width,
-            label=method,
+            label=method
         )
 
     ax.set_xticks(x)
-    ax.set_xticklabels(
-        ["Open", "Aisle", "Dense"]
-    )
-
+    ax.set_xticklabels(["Open", "Aisle", "Dense"])
     ax.set_title(title)
     ax.set_ylabel(ylabel)
     ax.legend()
@@ -90,89 +75,82 @@ def plot_metric(summary, metric, title, ylabel, filename):
 
     output_path = os.path.join(
         OUTPUT_DIR,
-        filename,
+        filename
     )
 
-    plt.savefig(
-        output_path,
-        dpi=300,
-    )
-
+    plt.savefig(output_path, dpi=300)
     plt.close()
 
     print(f"Created: {output_path}")
 
 
 def main():
-
-    os.makedirs(
-        OUTPUT_DIR,
-        exist_ok=True,
-    )
+    os.makedirs(OUTPUT_DIR, exist_ok=True)
 
     df = load_results()
-
     summary = create_summary(df)
 
-    # Save summary table.
     summary_file = (
-        "outputs/results/controlled_summary.csv"
+        "outputs/results/dynamic_summary.csv"
     )
 
     summary.to_csv(
         summary_file,
-        index=False,
+        index=False
     )
 
     print(f"Created: {summary_file}")
 
-    # 1. Success rate.
     plot_metric(
         summary,
         "success_rate",
-        "Success Rate by Scenario and Method",
+        "Dynamic Success Rate",
         "Success Rate",
-        "success_rate.png",
+        "dynamic_success_rate.png"
     )
 
-    # 2. Average steps.
     plot_metric(
         summary,
         "average_steps",
-        "Average Steps by Scenario and Method",
+        "Dynamic Average Steps",
         "Average Steps",
-        "average_steps.png",
+        "dynamic_average_steps.png"
     )
 
-    # 3. Average episode reward.
     plot_metric(
         summary,
         "average_reward",
-        "Average Episode Reward by Scenario and Method",
+        "Dynamic Average Reward",
         "Average Reward",
-        "reward_comparison.png",
+        "dynamic_reward_comparison.png"
     )
 
-    # 4. Average path length.
     plot_metric(
         summary,
         "average_path_length",
-        "Average Path Length by Scenario and Method",
-        "Path Length",
-        "path_length_comparison.png",
+        "Dynamic Path Length",
+        "Average Path Length",
+        "dynamic_path_length_comparison.png"
     )
 
-    # 5. Collision rate.
     plot_metric(
         summary,
         "collision_rate",
-        "Collision Rate by Scenario and Method",
+        "Dynamic Collision Rate",
         "Collision Rate",
-        "collision_comparison.png",
+        "dynamic_collision_comparison.png"
+    )
+
+    plot_metric(
+        summary,
+        "average_replans",
+        "Dynamic Replanning",
+        "Average Replans",
+        "dynamic_replanning_comparison.png"
     )
 
     print()
-    print("All evaluation graphs generated.")
+    print("All dynamic evaluation graphs generated.")
 
 
 if __name__ == "__main__":
