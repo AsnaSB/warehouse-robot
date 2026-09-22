@@ -65,5 +65,4 @@ class HybridAgent:
         return self.waypoint_manager.get_current_waypoint()
 
     def get_action(self, state, epsilon: float = 0.0) -> int:
-        """Queries the DDQN for local action with epsilon-greedy exploration."""
-        return self.ddqn.select_action(state, epsilon=epsilon)
+        return self.ddqn.select_action(state)
