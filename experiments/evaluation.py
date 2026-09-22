@@ -1,7 +1,7 @@
 import sys
 import os
 import numpy as np
-
+import torch
 # Force the project root to the absolute front of Python's path list
 project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
 sys.path.insert(0, project_root)
@@ -11,7 +11,7 @@ from src.environment.state_augmentation import StateAugmenter
 from src.astar.astar_planner import AStarPlanner
 from src.astar.replanner import DynamicReplanner
 from src.hybrid.waypoint_manager import WaypointManager
-from src.ddqn.agent import DDQNAgent
+from src.ddqn.new_agent import DDQNAgent
 from src.hybrid.hybrid_agent import HybridAgent
 
 def evaluate_model(model_path, is_hybrid=True, num_episodes=50):
@@ -25,15 +25,22 @@ def evaluate_model(model_path, is_hybrid=True, num_episodes=50):
         max_dynamic_obstacles=4
     )
     
-    agent = DDQNAgent(state_dim=51, action_dim=8)
+    agent = DDQNAgent(state_dim=51, num_actions=8)
     
-    # Load the trained weights
+    # Load the trained network weights
     if os.path.exists(model_path):
-        agent.load(model_path)
+        checkpoint = torch.load(model_path, map_location=agent.device)
+        agent.online_network.load_state_dict(checkpoint)
+        agent.target_network.load_state_dict(checkpoint)
+        agent.target_network.eval()
+
+        # Evaluation should use pure exploitation
+        agent.epsilon = 0.0
+
+        print("✅ Trained DDQN weights loaded successfully.")
     else:
         print(f"Error: Checkpoint not found at {model_path}")
         return
-
     if is_hybrid:
         planner = AStarPlanner(env._static_grid)
         replanner = DynamicReplanner(planner)
@@ -82,10 +89,10 @@ def evaluate_model(model_path, is_hybrid=True, num_episodes=50):
             
             # Epsilon is forced to 0.0 for pure exploitation (testing)
             if is_hybrid:
-                action = hybrid_agent.get_action(state, epsilon=0.0)
+                action = hybrid_agent.get_action(state)
             else:
-                action = agent.select_action(state, epsilon=0.0)
-            
+                action = agent.select_action(state)
+                
             next_obs, reward, terminated, truncated, info = env.step(action)
             done = terminated or truncated
             step_count += 1
