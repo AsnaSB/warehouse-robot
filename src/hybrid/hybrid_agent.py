@@ -379,14 +379,13 @@ class HybridAgent:
 
         if valid_actions is not None:
             valid_set = set(int(a) for a in valid_actions)
-            self.last_valid_actions = sorted(valid_set)
-
-            if len(valid_set) < self.ddqn.num_actions:
+            num_actions = getattr(self.ddqn, "num_actions", getattr(self.ddqn, "action_dim", getattr(getattr(self.ddqn, "config", None), "num_actions", 8)))
+            if len(valid_set) < num_actions:
                 self.last_action_masked = True
 
         # Backward-compatible behavior.
         if current_pos is None or waypoint is None:
-            if valid_set is not None:
+            if valid_set is not None and hasattr(self.ddqn, "select_action_masked"):
                 return self.ddqn.select_action_masked(
                     state,
                     valid_set,

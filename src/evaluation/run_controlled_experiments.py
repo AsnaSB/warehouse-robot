@@ -3,8 +3,12 @@
 import csv
 import math
 import os
-
+import sys
 import torch
+
+PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
+if PROJECT_ROOT not in sys.path:
+    sys.path.insert(0, PROJECT_ROOT)
 
 from src.astar.astar_planner import AStarPlanner
 from src.astar.replanner import DynamicReplanner
@@ -124,6 +128,31 @@ def calculate_path_length(path):
         )
 
     return length
+
+
+def get_valid_actions(env, current_pos, blocked_cells=None):
+    """Compute legal action indices from current_pos avoiding shelves and blocked cells."""
+    if blocked_cells is None:
+        blocked_cells = set()
+    grid_size = env.grid_size
+    valid = set()
+    r, c = current_pos
+    actions_dict = {
+        0: (-1, 0),
+        1: (-1, 1),
+        2: (0, 1),
+        3: (1, 1),
+        4: (1, 0),
+        5: (1, -1),
+        6: (0, -1),
+        7: (-1, -1),
+    }
+    for action_idx, (dr, dc) in actions_dict.items():
+        nr, nc = r + dr, c + dc
+        if 0 <= nr < grid_size and 0 <= nc < grid_size:
+            if env._static_grid[nr, nc] != 1 and (nr, nc) not in blocked_cells:
+                valid.add(action_idx)
+    return valid if valid else set(range(8))
 
 
 # ---------------------------------------------------------
@@ -466,9 +495,19 @@ def evaluate_hybrid(
             scenario
         )
 
-        action = greedy_action(
-            hybrid_agent.ddqn,
-            state
+        valid_actions = get_valid_actions(
+            env,
+            current_position,
+            blocked_cells
+        )
+
+        action = hybrid_agent.get_action(
+            state,
+            epsilon=0.0,
+            current_pos=current_position,
+            waypoint=waypoint,
+            blocked_cells=blocked_cells,
+            valid_actions=valid_actions
         )
 
         (
